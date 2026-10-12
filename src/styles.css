@@ -113,7 +113,7 @@ button {
 
 .workspace {
   display: grid;
-  grid-template-columns: 362px minmax(0, 1fr);
+  grid-template-columns: minmax(362px, 3fr) minmax(0, 7fr);
   gap: 22px;
   max-width: 1600px;
   margin: 0 auto;
@@ -1618,7 +1618,7 @@ h1 {
 
 @media (min-width: 1500px) {
   .workspace {
-    grid-template-columns: 380px minmax(0, 1fr);
+    grid-template-columns: minmax(420px, 3fr) minmax(0, 7fr);
     gap: 26px;
   }
 }
@@ -1688,7 +1688,6 @@ h1 {
   }
 
   .scope-panel {
-    order: 1;
     width: 100%;
   }
 
