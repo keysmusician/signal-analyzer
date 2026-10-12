@@ -1692,6 +1692,10 @@ h1 {
     width: 100%;
   }
 
+  .analyzer-list > .add-analyzer {
+    order: 2;
+  }
+
   .controls-hint {
     margin-top: 16px;
   }
