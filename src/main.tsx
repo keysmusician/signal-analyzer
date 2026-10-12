@@ -426,39 +426,36 @@ interface WaveEditorProps {
   onPhaseEditorOpenChange: (waveId: string | undefined) => void;
 }
 
-const WaveEditor: Component<WaveEditorProps> = (props) => {
-  let functionMenu: HTMLDivElement | undefined;
+interface PhaseControlProps {
+  wave: Wave;
+  onChange: (id: string, changes: Partial<Wave>) => void;
+  editorOpen: boolean;
+  onEditorOpenChange: (waveId: string | undefined) => void;
+}
+
+const PhaseControl: Component<PhaseControlProps> = (props) => {
   let phaseEditorContainer: HTMLDivElement | undefined;
-  let activePhasePointerId: number | undefined;
-  const [styleOpen, setStyleOpen] = createSignal(false);
-  const [functionOpen, setFunctionOpen] = createSignal(false);
+  let activePointerId: number | undefined;
   const [draftPhase, setDraftPhase] = createSignal(props.wave.phase);
 
   createEffect(() => setDraftPhase(props.wave.phase));
 
   onMount(() => {
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!functionMenu?.contains(event.target as Node)) setFunctionOpen(false);
       if (
-        props.phaseEditorOpen
+        props.editorOpen
         && phaseEditorContainer
         && event.target instanceof Node
         && !phaseEditorContainer.contains(event.target)
       ) {
-        props.onPhaseEditorOpenChange(undefined);
+        props.onEditorOpenChange(undefined);
       }
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer);
     onCleanup(() => document.removeEventListener("pointerdown", closeOnOutsidePointer));
   });
 
-  const isPeriod = () => props.wave.frequencyMode === "period";
-
-  const displayFrequency = () => isPeriod()
-    ? props.wave.frequency === 0 ? 0 : Number((1 / props.wave.frequency).toPrecision(6))
-    : props.wave.frequency;
-
-  const phaseLimits = () => {
+  const limits = () => {
     const signed = props.wave.phasePolarity === "signed";
     return props.wave.phaseUnit === "degrees"
       ? { min: signed ? -180 : 0, max: signed ? 180 : 360, step: 1 }
@@ -467,16 +464,13 @@ const WaveEditor: Component<WaveEditorProps> = (props) => {
         : { min: signed ? -Math.PI : 0, max: signed ? Math.PI : 2 * Math.PI, step: 0.01 };
   };
 
-  const phaseUnitDisplay = () => props.wave.phaseUnit === "degrees"
+  const unitDisplay = () => props.wave.phaseUnit === "degrees"
     ? "°"
     : props.wave.phaseUnit === "turns"
       ? "τ"
       : "rad";
 
-  const update = (key: keyof Wave, value: string | number | boolean) =>
-    props.onChange(props.wave.id, { [key]: value });
-
-  const setPhasePolarity = (polarity: PhasePolarity) => {
+  const setPolarity = (polarity: PhasePolarity) => {
     props.onChange(props.wave.id, {
       phase: normalizePhase(props.wave.phase, props.wave.phaseUnit, polarity),
       phasePolarity: polarity,
@@ -490,11 +484,11 @@ const WaveEditor: Component<WaveEditorProps> = (props) => {
     const radians = Math.atan2(100 - y, x - 100);
     const phase = normalizePhase(radiansToPhase(radians, props.wave.phaseUnit), props.wave.phaseUnit, props.wave.phasePolarity);
     setDraftPhase(phase);
-    update("phase", phase);
+    props.onChange(props.wave.id, { phase });
   };
 
   const adjustPhaseByKey = (event: KeyboardEvent) => {
-    const step = phaseLimits().step;
+    const { min, max, step } = limits();
     const direction = event.key === "ArrowRight" || event.key === "ArrowUp"
       ? 1
       : event.key === "ArrowLeft" || event.key === "ArrowDown"
@@ -502,9 +496,155 @@ const WaveEditor: Component<WaveEditorProps> = (props) => {
         : 0;
     if (!direction) return;
     event.preventDefault();
-    const { min, max } = phaseLimits();
-    update("phase", Math.max(min, Math.min(max, props.wave.phase + direction * step)));
+    props.onChange(props.wave.id, {
+      phase: Math.max(min, Math.min(max, props.wave.phase + direction * step)),
+    });
   };
+
+  return (
+    <div class="field-control">
+      <div class="field-title">
+        <span>Phase</span>
+        <div class="phase-editor-container" ref={phaseEditorContainer}>
+          <button
+            class="frequency-toggle phase-editor-button"
+            type="button"
+            aria-label={`Open phase editor for ${props.wave.name}`}
+            aria-haspopup="dialog"
+            aria-expanded={props.editorOpen}
+            title="Open phase editor"
+            onClick={() => props.onEditorOpenChange(props.editorOpen ? undefined : props.wave.id)}
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <circle cx="10" cy="10" r="8" />
+              <circle cx="10" cy="10" r="4" />
+              <path d="M1 10h18M10 1v18" />
+              <circle cx="10" cy="10" r="1" class="phase-editor-icon-center" />
+            </svg>
+          </button>
+          <Show when={props.editorOpen}>
+            <div
+              class="phase-editor-popover"
+              role="dialog"
+              aria-label={`${props.wave.name} phase editor`}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <div class="phase-editor-heading">
+                <strong>Phase</strong>
+                <button
+                  class="frequency-toggle phase-polarity-toggle"
+                  type="button"
+                  aria-label={`Switch to ${props.wave.phasePolarity === "positive" ? "signed" : "positive"} phase range`}
+                  aria-pressed={props.wave.phasePolarity === "positive"}
+                  title={`Switch to ${props.wave.phasePolarity === "positive" ? "signed" : "positive"} phase range`}
+                  onClick={() => setPolarity(props.wave.phasePolarity === "positive" ? "signed" : "positive")}
+                >
+                  {props.wave.phasePolarity === "positive" ? "+" : "±"}
+                </button>
+              </div>
+              <svg
+                class="phase-editor-dial"
+                viewBox="0 0 200 200"
+                style={{ "--phase-point-color": props.wave.color }}
+                role="slider"
+                aria-label="Signal phase"
+                aria-valuemin={limits().min}
+                aria-valuemax={limits().max}
+                aria-valuenow={draftPhase()}
+                aria-valuetext={`${draftPhase().toFixed(6)} ${unitDisplay()}`}
+                tabIndex={0}
+                onKeyDown={adjustPhaseByKey}
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.preventDefault();
+                  activePointerId = event.pointerId;
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  setPhaseFromPointer(event);
+                }}
+                onPointerMove={(event) => {
+                  if (activePointerId === event.pointerId) setPhaseFromPointer(event);
+                }}
+                onPointerUp={(event) => {
+                  if (activePointerId === event.pointerId) activePointerId = undefined;
+                }}
+                onPointerCancel={() => { activePointerId = undefined; }}
+                onLostPointerCapture={() => { activePointerId = undefined; }}
+              >
+                <circle class="phase-editor-ring" cx="100" cy="100" r="72" />
+                <circle class="phase-editor-ring phase-editor-inner-ring" cx="100" cy="100" r="36" />
+                <path class="phase-editor-crosshair" d="M20 100h160M100 20v160" />
+                <line
+                  class="phase-editor-radius"
+                  x1="100"
+                  y1="100"
+                  x2={100 + Math.cos(phaseToRadians(draftPhase(), props.wave.phaseUnit)) * 72}
+                  y2={100 - Math.sin(phaseToRadians(draftPhase(), props.wave.phaseUnit)) * 72}
+                />
+                <circle
+                  class="phase-editor-point"
+                  cx={100 + Math.cos(phaseToRadians(draftPhase(), props.wave.phaseUnit)) * 72}
+                  cy={100 - Math.sin(phaseToRadians(draftPhase(), props.wave.phaseUnit)) * 72}
+                  r="6"
+                />
+              </svg>
+              <output class="phase-editor-value" aria-live="polite">
+                {draftPhase().toFixed(6)} {unitDisplay()}
+              </output>
+            </div>
+          </Show>
+        </div>
+      </div>
+      <div class="input-with-unit phase-input">
+        <NumericInput
+          min={limits().min}
+          max={limits().max}
+          ariaLabel={`Phase ${props.wave.phaseUnit}`}
+          value={props.wave.phase}
+          onValue={(value) => props.onChange(props.wave.id, { phase: value })}
+        />
+        <span class="phase-unit-display" aria-hidden="true">{unitDisplay()}</span>
+        <select
+          class="phase-unit-select"
+          aria-label="Phase unit"
+          value={props.wave.phaseUnit}
+          onChange={(event) => {
+            const unit = event.currentTarget.value as PhaseUnit;
+            props.onChange(props.wave.id, {
+              phase: normalizePhase(radiansToPhase(phaseToRadians(props.wave.phase, props.wave.phaseUnit), unit), unit, props.wave.phasePolarity),
+            });
+            props.onChange(props.wave.id, { phaseUnit: unit });
+          }}
+        >
+          <option value="degrees">Degrees</option>
+          <option value="turns">Turns</option>
+          <option value="radians">Radians</option>
+        </select>
+      </div>
+    </div>
+  );
+};
+
+const WaveEditor: Component<WaveEditorProps> = (props) => {
+  let functionMenu: HTMLDivElement | undefined;
+  const [styleOpen, setStyleOpen] = createSignal(false);
+  const [functionOpen, setFunctionOpen] = createSignal(false);
+
+  onMount(() => {
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!functionMenu?.contains(event.target as Node)) setFunctionOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    onCleanup(() => document.removeEventListener("pointerdown", closeOnOutsidePointer));
+  });
+
+  const isPeriod = () => props.wave.frequencyMode === "period";
+
+  const displayFrequency = () => isPeriod()
+    ? props.wave.frequency === 0 ? 0 : Number((1 / props.wave.frequency).toPrecision(6))
+    : props.wave.frequency;
+
+  const update = (key: keyof Wave, value: string | number | boolean) =>
+    props.onChange(props.wave.id, { [key]: value });
 
   return (
     <article class="wave-card">
@@ -672,125 +812,12 @@ const WaveEditor: Component<WaveEditorProps> = (props) => {
             <small>{isPeriod() ? "s" : "Hz"}</small>
           </div>
         </label>
-        <div class="field-control">
-          <div class="field-title">
-            <span>Phase</span>
-            <div class="phase-editor-container" ref={phaseEditorContainer}>
-              <button
-                class="frequency-toggle phase-editor-button"
-                type="button"
-                aria-label={`Open phase editor for ${props.wave.name}`}
-                aria-haspopup="dialog"
-                aria-expanded={props.phaseEditorOpen}
-                title="Open phase editor"
-                onClick={() => props.onPhaseEditorOpenChange(props.phaseEditorOpen ? undefined : props.wave.id)}
-              >
-                <svg viewBox="0 0 20 20" aria-hidden="true">
-                  <circle cx="10" cy="10" r="8" />
-                  <circle cx="10" cy="10" r="4" />
-                  <path d="M1 10h18M10 1v18" />
-                  <circle cx="10" cy="10" r="1" class="phase-editor-icon-center" />
-                </svg>
-              </button>
-              <Show when={props.phaseEditorOpen}>
-                <div
-                  class="phase-editor-popover"
-                  role="dialog"
-                  aria-label={`${props.wave.name} phase editor`}
-                  onPointerDown={(event) => event.stopPropagation()}
-                >
-                  <div class="phase-editor-heading">
-                    <strong>Phase</strong>
-                    <button
-                      class="frequency-toggle phase-polarity-toggle"
-                      type="button"
-                      aria-label={`Switch to ${props.wave.phasePolarity === "positive" ? "signed" : "positive"} phase range`}
-                      aria-pressed={props.wave.phasePolarity === "positive"}
-                      title={`Switch to ${props.wave.phasePolarity === "positive" ? "signed" : "positive"} phase range`}
-                      onClick={() => setPhasePolarity(props.wave.phasePolarity === "positive" ? "signed" : "positive")}
-                    >
-                      {props.wave.phasePolarity === "positive" ? "+" : "±"}
-                    </button>
-                  </div>
-                  <svg
-                    class="phase-editor-dial"
-                    viewBox="0 0 200 200"
-                    style={{ "--phase-point-color": props.wave.color }}
-                    role="slider"
-                    aria-label="Signal phase"
-                    aria-valuemin={phaseLimits().min}
-                    aria-valuemax={phaseLimits().max}
-                    aria-valuenow={draftPhase()}
-                    aria-valuetext={`${draftPhase().toFixed(6)} ${phaseUnitDisplay()}`}
-                    tabIndex={0}
-                    onKeyDown={adjustPhaseByKey}
-                    onPointerDown={(event) => {
-                      if (event.button !== 0) return;
-                      event.preventDefault();
-                      activePhasePointerId = event.pointerId;
-                      event.currentTarget.setPointerCapture(event.pointerId);
-                      setPhaseFromPointer(event);
-                    }}
-                    onPointerMove={(event) => {
-                      if (activePhasePointerId === event.pointerId) setPhaseFromPointer(event);
-                    }}
-                    onPointerUp={(event) => {
-                      if (activePhasePointerId === event.pointerId) {
-                        activePhasePointerId = undefined;
-                      }
-                    }}
-                    onPointerCancel={() => { activePhasePointerId = undefined; }}
-                    onLostPointerCapture={() => { activePhasePointerId = undefined; }}
-                  >
-                    <circle class="phase-editor-ring" cx="100" cy="100" r="72" />
-                    <circle class="phase-editor-ring phase-editor-inner-ring" cx="100" cy="100" r="36" />
-                    <path class="phase-editor-crosshair" d="M20 100h160M100 20v160" />
-                    <line
-                      class="phase-editor-radius"
-                      x1="100"
-                      y1="100"
-                      x2={100 + Math.cos(phaseToRadians(draftPhase(), props.wave.phaseUnit)) * 72}
-                      y2={100 - Math.sin(phaseToRadians(draftPhase(), props.wave.phaseUnit)) * 72}
-                    />
-                    <circle
-                      class="phase-editor-point"
-                      cx={100 + Math.cos(phaseToRadians(draftPhase(), props.wave.phaseUnit)) * 72}
-                      cy={100 - Math.sin(phaseToRadians(draftPhase(), props.wave.phaseUnit)) * 72}
-                      r="6"
-                    />
-                  </svg>
-                  <output class="phase-editor-value" aria-live="polite">
-                    {draftPhase().toFixed(6)} {phaseUnitDisplay()}
-                  </output>
-                </div>
-              </Show>
-            </div>
-          </div>
-          <div class="input-with-unit phase-input">
-            <NumericInput
-              min={phaseLimits().min}
-              max={phaseLimits().max}
-              ariaLabel={`Phase ${props.wave.phaseUnit}`}
-              value={props.wave.phase}
-              onValue={(value) => update("phase", value)}
-            />
-            <span class="phase-unit-display" aria-hidden="true">{phaseUnitDisplay()}</span>
-            <select
-              class="phase-unit-select"
-              aria-label="Phase unit"
-              value={props.wave.phaseUnit}
-              onChange={(event) => {
-                const unit = event.currentTarget.value as PhaseUnit;
-                update("phase", normalizePhase(radiansToPhase(phaseToRadians(props.wave.phase, props.wave.phaseUnit), unit), unit, props.wave.phasePolarity));
-                update("phaseUnit", unit);
-              }}
-            >
-              <option value="degrees">Degrees</option>
-              <option value="turns">Turns</option>
-              <option value="radians">Radians</option>
-            </select>
-          </div>
-        </div>
+        <PhaseControl
+          wave={props.wave}
+          onChange={props.onChange}
+          editorOpen={props.phaseEditorOpen}
+          onEditorOpenChange={props.onPhaseEditorOpenChange}
+        />
       </div>
     </article>
   );
@@ -1381,6 +1408,387 @@ const ANALYTIC_MODES: { value: AnalyticMode; label: string }[] = [
   { value: "phase", label: "Phase" },
 ];
 
+interface SpectrumSeries {
+  name: string;
+  color: string;
+  opacity: number;
+  isAnalytic: boolean;
+  values: number[];
+}
+
+interface LegendItem {
+  name: string;
+  color: string;
+  opacity: number;
+}
+
+const AnalyzerLegend: Component<{ items: LegendItem[]; className: string }> = (props) => (
+  <div class={props.className}>
+    <For each={props.items}>
+      {(item) => <span><i style={{ background: item.color, opacity: item.opacity }} />{item.name}</span>}
+    </For>
+  </div>
+);
+
+function calculateDiscreteSpectrum(
+  sampleCount: number,
+  duration: number,
+  window: WindowFunction,
+  valueAt: (time: number) => number,
+) {
+  const samples = Array.from({ length: sampleCount }, (_, index) => {
+    const windowValue = window === "hann"
+      ? 0.5 * (1 - Math.cos(2 * Math.PI * index / (sampleCount - 1)))
+      : window === "hamming"
+        ? 0.54 - 0.46 * Math.cos(2 * Math.PI * index / (sampleCount - 1))
+        : 1;
+    return valueAt((index / sampleCount - 0.5) * duration) * windowValue;
+  });
+  const magnitude: number[] = [];
+  const phase: number[] = [];
+  for (let bin = 0; bin < sampleCount / 2; bin += 1) {
+    let real = 0;
+    let imaginary = 0;
+    samples.forEach((value, index) => {
+      const angle = 2 * Math.PI * bin * index / sampleCount;
+      real += value * Math.cos(angle);
+      imaginary -= value * Math.sin(angle);
+    });
+    magnitude.push(Math.min(1, Math.sqrt(real ** 2 + imaginary ** 2) / sampleCount * 2));
+    phase.push(Math.atan2(imaginary, real));
+  }
+  return { magnitude, phase };
+}
+
+interface FrequencyPlotProps {
+  series: SpectrumSeries[];
+  binCount: number;
+  maxFrequency: number;
+}
+
+const FrequencyMagnitudePlot: Component<FrequencyPlotProps> = (props) => {
+  let plot: SVGSVGElement | undefined;
+  let animationFrame = 0;
+  let pendingPointer: PointerEvent | undefined;
+  const [cursor, setCursor] = createSignal<{ x: number; y: number; left: number; top: number; bin: number }>();
+  const width = 1000;
+  const height = 320;
+  const dragCrosshair = useDragCrosshair(width, height);
+
+  const updateCursorNow = (event: PointerEvent) => {
+    if (!plot?.parentElement) return;
+    const bounds = plot.getBoundingClientRect();
+    const wrapperBounds = plot.parentElement.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+    const y = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
+    const bin = Math.max(0, Math.min(props.binCount - 1, Math.round(x * (props.binCount - 1))));
+    const tooltipWidth = 148;
+    const tooltipHeight = 40;
+    setCursor({
+      x: bin / (props.binCount - 1) * width,
+      y: y * height,
+      bin,
+      left: Math.min(wrapperBounds.width - tooltipWidth - 6, Math.max(6, event.clientX - wrapperBounds.left + 14)),
+      top: Math.min(bounds.height - tooltipHeight - 6, Math.max(6, event.clientY - wrapperBounds.top - tooltipHeight - 8)),
+    });
+  };
+
+  const updateCursor = (event: PointerEvent) => {
+    pendingPointer = event;
+    if (animationFrame) return;
+    animationFrame = requestAnimationFrame(() => {
+      animationFrame = 0;
+      const pointer = pendingPointer;
+      pendingPointer = undefined;
+      if (pointer) updateCursorNow(pointer);
+    });
+  };
+
+  const updatePointer = (event: PointerEvent & { currentTarget: Element }) => {
+    updateCursor(event);
+    dragCrosshair.update(event);
+  };
+
+  onCleanup(() => {
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+  });
+
+  return (
+    <div class="frequency-plot-wrap">
+      <svg
+        ref={plot}
+        class="frequency-plot"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="Frequency domain spectrum"
+        onPointerDown={dragCrosshair.start}
+        onPointerMove={updatePointer}
+        onPointerUp={dragCrosshair.stop}
+        onPointerCancel={dragCrosshair.stop}
+        onLostPointerCapture={dragCrosshair.stop}
+        onPointerLeave={() => setCursor()}
+      >
+        <defs>
+          <pattern id="frequency-grid" width="125" height="80" patternUnits="userSpaceOnUse">
+            <path d="M 125 0 L 0 0 0 80" fill="none" stroke="#24373b" stroke-width="1" />
+          </pattern>
+        </defs>
+        <rect width={width} height={height} fill="#0b1115" />
+        <rect width={width} height={height} fill="url(#frequency-grid)" />
+        <line x1="0" y1={height - 1} x2={width} y2={height - 1} class="frequency-axis" />
+        <For each={props.series}>
+          {(item) => (
+            <Show
+              when={item.isAnalytic}
+              fallback={
+                <path
+                  d={item.values.map((value, index) => {
+                    const x = index / (props.binCount - 1) * width;
+                    const y = height - value * (height - 18) - 1;
+                    return `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
+                  }).join(" ")}
+                  fill="none"
+                  stroke={item.color}
+                  opacity={item.opacity}
+                  class="signal-path"
+                />
+              }
+            >
+              <For each={item.values.map((value, index) => ({ value, index })).filter(({ value }) => value > 0)}>
+                {({ value, index }) => {
+                  const x = index / (props.binCount - 1) * width;
+                  return (
+                    <line
+                      x1={x}
+                      y1={height - 1}
+                      x2={x}
+                      y2={height - value * (height - 18) - 1}
+                      stroke={item.color}
+                      opacity={item.opacity}
+                      class="signal-path"
+                    />
+                  );
+                }}
+              </For>
+            </Show>
+          )}
+        </For>
+        <For each={[0, 0.5, 1]}>
+          {(fraction) => <line x1="0" y1={height - 1 - fraction * (height - 18)} x2={width} y2={height - 1 - fraction * (height - 18)} class="frequency-axis frequency-axis-horizontal" />}
+        </For>
+        <Show when={dragCrosshair.crosshair()}>
+          {(point) => (
+            <g class="measurement-crosshair" aria-hidden="true">
+              <line x1={point().x} y1="0" x2={point().x} y2={height} />
+              <line x1="0" y1={point().y} x2={width} y2={point().y} />
+            </g>
+          )}
+        </Show>
+        <text x="8" y="19" class="frequency-title">MAGNITUDE</text>
+        <text x="8" y={height / 2} class="axis-tick">0.5</text>
+        <text x="8" y={38} class="axis-tick">1</text>
+        <text x="8" y={height - 8} class="axis-tick">0 Hz</text>
+        <text x={width / 2} y={height - 8} text-anchor="middle" class="axis-tick">{formatAxisValue(props.maxFrequency / 2)} Hz</text>
+        <text x={width - 8} y={height - 8} text-anchor="end" class="axis-tick">{formatAxisValue(props.maxFrequency)} Hz</text>
+      </svg>
+      <Show when={cursor()}>
+        {(point) => (
+          <div class="frequency-tooltip" aria-hidden="true" style={{ left: `${point().left}px`, top: `${point().top}px` }}>
+            <span>f {formatAxisValue(point().bin / (props.binCount - 1) * props.maxFrequency)} Hz</span>
+            <span>M {formatAxisValue(props.series[0]?.values[point().bin] ?? 0)}</span>
+          </div>
+        )}
+      </Show>
+    </div>
+  );
+};
+
+interface FrequencyPhasePlotProps extends FrequencyPlotProps {
+  phaseUnit: PhaseUnit;
+}
+
+const FrequencyPhasePlot: Component<FrequencyPhasePlotProps> = (props) => {
+  const [cursor, setCursor] = createSignal<{ left: number; top: number; bin: number; phase: number }>();
+  const width = 1000;
+  const height = 320;
+  const dragCrosshair = useDragCrosshair(width, height);
+  const phaseLabel = (fraction: number) => {
+    if (fraction === 0) return "0";
+    const sign = fraction < 0 ? "-" : "";
+    return props.phaseUnit === "degrees" ? `${sign}180°` : props.phaseUnit === "turns" ? `${sign}0.5` : `${sign}π`;
+  };
+  const formatPhaseValue = (radians: number) => props.phaseUnit === "degrees"
+    ? `${formatAxisValue(radians * 180 / Math.PI)}º`
+    : props.phaseUnit === "turns"
+      ? `${formatAxisValue(radians / (2 * Math.PI))}τ`
+      : `${formatAxisValue(radians)} rad`;
+
+  const updatePointer = (event: PointerEvent & { currentTarget: Element }) => {
+    const plot = event.currentTarget;
+    const bounds = plot.getBoundingClientRect();
+    const wrapperBounds = plot.parentElement?.getBoundingClientRect();
+    if (!wrapperBounds) return;
+
+    const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+    const y = Math.max(0, Math.min(height, (event.clientY - bounds.top) / bounds.height * height));
+    const bin = Math.max(0, Math.min(props.binCount - 1, Math.round(x * (props.binCount - 1))));
+    const phase = Math.max(-Math.PI, Math.min(
+      Math.PI,
+      (height / 2 - y) / (height / 2 - 18) * Math.PI,
+    ));
+    const tooltipWidth = 190;
+    const tooltipHeight = 48;
+    setCursor({
+      bin,
+      phase,
+      left: Math.min(wrapperBounds.width - tooltipWidth - 6, Math.max(6, event.clientX - wrapperBounds.left + 14)),
+      top: Math.min(bounds.height - tooltipHeight - 6, Math.max(6, event.clientY - bounds.top - tooltipHeight - 8)),
+    });
+    dragCrosshair.update(event);
+  };
+
+  return (
+    <div class="frequency-plot-wrap">
+      <svg
+        class="frequency-plot phase-plot"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="Frequency domain phase spectrum"
+        onPointerDown={dragCrosshair.start}
+        onPointerMove={updatePointer}
+        onPointerUp={dragCrosshair.stop}
+        onPointerCancel={dragCrosshair.stop}
+        onLostPointerCapture={dragCrosshair.stop}
+        onPointerLeave={() => setCursor()}
+      >
+        <rect width={width} height={height} fill="#0b1115" />
+        <rect width={width} height={height} fill="url(#frequency-grid)" />
+        <line x1="0" y1={height / 2} x2={width} y2={height / 2} class="frequency-axis" />
+        <For each={[0, 0.5, 1]}>
+          {(fraction) => <line x1="0" y1={fraction * height} x2={width} y2={fraction * height} class="frequency-axis frequency-axis-horizontal" />}
+        </For>
+        <Show when={dragCrosshair.crosshair()}>
+          {(point) => (
+            <g class="measurement-crosshair" aria-hidden="true">
+              <line x1={point().x} y1="0" x2={point().x} y2={height} />
+              <line x1="0" y1={point().y} x2={width} y2={point().y} />
+            </g>
+          )}
+        </Show>
+        <For each={props.series}>
+          {(item) => (
+            <Show
+              when={item.isAnalytic}
+              fallback={
+                <path
+                  d={item.values.map((value, index) => {
+                    const x = index / (props.binCount - 1) * width;
+                    const y = height / 2 - (value / Math.PI) * (height / 2 - 18);
+                    return `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
+                  }).join(" ")}
+                  fill="none"
+                  stroke={item.color}
+                  opacity={item.opacity}
+                  class="signal-path"
+                />
+              }
+            >
+              <For each={item.values.map((value, index) => ({ value, index })).filter(({ value }) => Number.isFinite(value))}>
+                {({ value, index }) => (
+                  <circle
+                    cx={index / (props.binCount - 1) * width}
+                    cy={height / 2 - (value / Math.PI) * (height / 2 - 18)}
+                    r="3"
+                    fill={item.color}
+                    opacity={item.opacity}
+                    class="signal-path"
+                  />
+                )}
+              </For>
+            </Show>
+          )}
+        </For>
+        <text x="8" y="19" class="frequency-title">PHASE</text>
+        <text x="8" y="38" class="axis-tick">{phaseLabel(1)}</text>
+        <text x="8" y={height / 2 + 4} class="axis-tick">0</text>
+        <text x="8" y={height - 8} class="axis-tick">{phaseLabel(-1)}</text>
+        <text x={width - 8} y={height - 8} text-anchor="end" class="axis-tick">{formatAxisValue(props.maxFrequency)} Hz</text>
+      </svg>
+      <Show when={cursor()}>
+        {(point) => (
+          <div class="frequency-tooltip phase-tooltip" aria-hidden="true" style={{ left: `${point().left}px`, top: `${point().top}px` }}>
+            <span>f {formatAxisValue(point().bin / (props.binCount - 1) * props.maxFrequency)} Hz</span>
+            <span>Phase: {formatPhaseValue(point().phase)}</span>
+          </div>
+        )}
+      </Show>
+    </div>
+  );
+};
+
+interface FrequencyAnalyzerSettingsProps {
+  settings: FourierSettings;
+  onSettingsChange: (settings: FourierSettings) => void;
+  phaseUnit: PhaseUnit;
+  onPhaseUnitChange: (unit: PhaseUnit) => void;
+}
+
+const FrequencyAnalyzerSettings: Component<FrequencyAnalyzerSettingsProps> = (props) => (
+  <div class="analyzer-settings">
+    <div class="settings-row frequency-settings-row">
+      <h4 class="settings-row-label">Frequency plot</h4>
+      <label class="fft-size-setting">
+        <span>FFT SIZE</span>
+        <select
+          value={props.settings.sampleCount}
+          onChange={(event) => props.onSettingsChange({ ...props.settings, sampleCount: Number(event.currentTarget.value) })}
+        >
+          <option value="128">128</option>
+          <option value="256">256</option>
+          <option value="512">512</option>
+          <option value="1024">1024</option>
+        </select>
+      </label>
+      <label class="window-duration-setting">
+        <span>WINDOW (S)</span>
+        <NumericInput
+          min={0.001}
+          max={100}
+          value={props.settings.duration}
+          ariaLabel="Fourier analysis window duration"
+          onValue={(value) => props.onSettingsChange({ ...props.settings, duration: value })}
+        />
+      </label>
+      <label class="window-function-setting">
+        <span>WINDOW FUNCTION</span>
+        <select
+          value={props.settings.window}
+          onChange={(event) => props.onSettingsChange({ ...props.settings, window: event.currentTarget.value as WindowFunction })}
+        >
+          <option value="rectangular">Rectangular</option>
+          <option value="hann">Hann</option>
+          <option value="hamming">Hamming</option>
+        </select>
+      </label>
+    </div>
+    <div class="settings-row">
+      <h4 class="settings-row-label">Phase plot</h4>
+      <label>
+        <span>UNIT</span>
+        <select
+          value={props.phaseUnit}
+          aria-label="Phase label units"
+          onChange={(event) => props.onPhaseUnitChange(event.currentTarget.value as PhaseUnit)}
+        >
+          <option value="degrees">Degrees</option>
+          <option value="radians">Radians</option>
+          <option value="turns">Turns</option>
+        </select>
+      </label>
+    </div>
+  </div>
+);
+
 const FrequencyDomain: Component<{
   waves: Wave[];
   groups: SignalGroup[];
@@ -1388,108 +1796,58 @@ const FrequencyDomain: Component<{
   onSettingsChange: (settings: FourierSettings) => void;
   onRemove: () => void;
 }> = (props) => {
-  let plot: SVGSVGElement | undefined;
-  let animationFrame = 0;
-  let pendingPointer: PointerEvent | undefined;
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [showFourier, setShowFourier] = createSignal(true);
   const [showAnalytic, setShowAnalytic] = createSignal(false);
   const [phaseUnit, setPhaseUnit] = createSignal<PhaseUnit>("radians");
-  const phaseLabel = (fraction: number) => {
-    const unit = phaseUnit();
-    if (fraction === 0) return "0";
-    const sign = fraction < 0 ? "-" : "";
-    return unit === "degrees" ? `${sign}180°` : unit === "turns" ? `${sign}0.5` : `${sign}π`;
-  };
-  const [cursor, setCursor] = createSignal<{ x: number; y: number; left: number; top: number; bin: number }>();
-  const [phaseCursor, setPhaseCursor] = createSignal<{ left: number; top: number; bin: number; phase: number }>();
-  const width = 1000;
-  const height = 320;
-  const dragCrosshair = useDragCrosshair(width, height);
-  const phaseDragCrosshair = useDragCrosshair(width, height);
   const bins = () => props.settings.sampleCount / 2;
   const maxFrequency = () => props.settings.sampleCount / (2 * props.settings.duration);
 
-  const spectrumFor = (valueAt: (time: number) => number) => {
-    const samples = Array.from({ length: props.settings.sampleCount }, (_, index) =>
-      valueAt((index / props.settings.sampleCount - 0.5) * props.settings.duration)
-        * (props.settings.window === "hann"
-          ? 0.5 * (1 - Math.cos(2 * Math.PI * index / (props.settings.sampleCount - 1)))
-          : props.settings.window === "hamming"
-            ? 0.54 - 0.46 * Math.cos(2 * Math.PI * index / (props.settings.sampleCount - 1))
-            : 1),
-    );
-    return Array.from({ length: bins() }, (_, bin) => {
-      let real = 0;
-      let imaginary = 0;
-      samples.forEach((value, index) => {
-        const angle = 2 * Math.PI * bin * index / props.settings.sampleCount;
-        real += value * Math.cos(angle);
-        imaginary -= value * Math.sin(angle);
-      });
-      return Math.min(1, Math.sqrt(real ** 2 + imaginary ** 2) / props.settings.sampleCount * 2);
-    });
-  };
-
-  const phaseSpectrumFor = (valueAt: (time: number) => number) => {
-    const samples = Array.from({ length: props.settings.sampleCount }, (_, index) =>
-      valueAt((index / props.settings.sampleCount - 0.5) * props.settings.duration)
-        * (props.settings.window === "hann"
-          ? 0.5 * (1 - Math.cos(2 * Math.PI * index / (props.settings.sampleCount - 1)))
-          : props.settings.window === "hamming"
-            ? 0.54 - 0.46 * Math.cos(2 * Math.PI * index / (props.settings.sampleCount - 1))
-            : 1),
-    );
-    return Array.from({ length: bins() }, (_, bin) => {
-      let real = 0;
-      let imaginary = 0;
-      samples.forEach((value, index) => {
-        const angle = 2 * Math.PI * bin * index / props.settings.sampleCount;
-        real += value * Math.cos(angle);
-        imaginary -= value * Math.sin(angle);
-      });
-      return Math.atan2(imaginary, real);
-    });
-  };
-
-  const fourierSeries = createMemo(() => [
+  const discreteSources = createMemo(() => [
     ...props.waves.filter((wave) => wave.visible).map((wave) => ({
       name: wave.name,
       color: wave.color,
       opacity: wave.opacity,
-      isAnalytic: false,
-      values: spectrumFor((time) => waveValueAt(wave, time)),
+      valueAt: (time: number) => waveValueAt(wave, time),
     })),
     ...props.groups.filter((group) => group.visible && group.waveIds.length > 0).map((group) => ({
       name: group.name,
       color: group.color,
       opacity: group.opacity,
-      isAnalytic: false,
-      values: spectrumFor((time) => group.waveIds.reduce((sum, waveId) => {
+      valueAt: (time: number) => group.waveIds.reduce((sum, waveId) => {
         const wave = props.waves.find((item) => item.id === waveId);
         return wave ? sum + waveValueAt(wave, time) : sum;
-      }, 0)),
+      }, 0),
     })),
   ]);
 
-  const fourierPhaseSeries = createMemo(() => fourierSeries().map((item, index) => ({
-    ...item,
-    values: index < props.waves.filter((wave) => wave.visible).length
-      ? phaseSpectrumFor((time) => waveValueAt(props.waves.filter((wave) => wave.visible)[index], time))
-      : phaseSpectrumFor((time) => {
-        const group = props.groups.filter((group) => group.visible && group.waveIds.length > 0)[
-          index - props.waves.filter((wave) => wave.visible).length
-        ];
-        return group.waveIds.reduce((sum, waveId) => {
-          const wave = props.waves.find((item) => item.id === waveId);
-          return wave ? sum + waveValueAt(wave, time) : sum;
-        }, 0);
-      }),
-  })));
+  const discreteSpectra = createMemo(() => discreteSources().map((source) => {
+    const spectrum = calculateDiscreteSpectrum(
+      props.settings.sampleCount,
+      props.settings.duration,
+      props.settings.window,
+      source.valueAt,
+    );
+    return {
+      magnitude: {
+        name: source.name,
+        color: source.color,
+        opacity: source.opacity,
+        isAnalytic: false,
+        values: spectrum.magnitude,
+      },
+      phase: {
+        name: source.name,
+        color: source.color,
+        opacity: source.opacity,
+        isAnalytic: false,
+        values: spectrum.phase,
+      },
+    };
+  }));
 
-  const phaseRadians = (wave: Wave) => wave.phaseUnit === "degrees"
-    ? wave.phase * Math.PI / 180
-    : wave.phaseUnit === "turns" ? wave.phase * 2 * Math.PI : wave.phase;
+  const fourierSeries = createMemo(() => discreteSpectra().map((item) => item.magnitude));
+  const fourierPhaseSeries = createMemo(() => discreteSpectra().map((item) => item.phase));
 
   const analyticSpectrumFor = (waves: Wave[]) => {
     const values = Array.from({ length: bins() }, () => 0);
@@ -1529,7 +1887,7 @@ const FrequencyDomain: Component<{
         if (index < visibleWaves.length) {
           const wave = visibleWaves[index];
           const waveBin = Math.round(Math.abs(wave.frequency) / maxFrequency() * (bins() - 1));
-          return waveBin === bin ? phaseRadians(wave) : Number.NaN;
+          return waveBin === bin ? phaseToRadians(wave.phase, wave.phaseUnit) : Number.NaN;
         }
         const group = visibleGroups[index - visibleWaves.length];
         const components = group.waveIds
@@ -1537,8 +1895,8 @@ const FrequencyDomain: Component<{
           .filter((wave): wave is Wave => wave !== undefined)
           .filter((wave) => Math.round(Math.abs(wave.frequency) / maxFrequency() * (bins() - 1)) === bin);
         if (components.length === 0) return Number.NaN;
-        const real = components.reduce((sum, wave) => sum + Math.abs(wave.amplitude) * Math.cos(phaseRadians(wave)), 0);
-        const imaginary = components.reduce((sum, wave) => sum + Math.abs(wave.amplitude) * Math.sin(phaseRadians(wave)), 0);
+        const real = components.reduce((sum, wave) => sum + Math.abs(wave.amplitude) * Math.cos(phaseToRadians(wave.phase, wave.phaseUnit)), 0);
+        const imaginary = components.reduce((sum, wave) => sum + Math.abs(wave.amplitude) * Math.sin(phaseToRadians(wave.phase, wave.phaseUnit)), 0);
         return Math.atan2(imaginary, real);
       }),
     }));
@@ -1563,74 +1921,6 @@ const FrequencyDomain: Component<{
     });
   });
 
-  const updateCursor = (event: PointerEvent) => {
-    pendingPointer = event;
-    if (animationFrame) return;
-    animationFrame = requestAnimationFrame(() => {
-      animationFrame = 0;
-      const pointer = pendingPointer;
-      pendingPointer = undefined;
-      if (pointer) updateCursorNow(pointer);
-    });
-  };
-
-  const updateCursorNow = (event: PointerEvent) => {
-    if (!plot || !plot.parentElement) return;
-    const bounds = plot.getBoundingClientRect();
-    const wrapperBounds = plot.parentElement.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-    const y = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
-    const bin = Math.max(0, Math.min(bins() - 1, Math.round(x * (bins() - 1))));
-    const tooltipWidth = 148;
-    const tooltipHeight = 40;
-    setCursor({
-      x: bin / (bins() - 1) * width,
-      y: y * height,
-      bin,
-      left: Math.min(wrapperBounds.width - tooltipWidth - 6, Math.max(6, event.clientX - wrapperBounds.left + 14)),
-      top: Math.min(bounds.height - tooltipHeight - 6, Math.max(6, event.clientY - wrapperBounds.top - tooltipHeight - 8)),
-    });
-  };
-
-  const updateFrequencyPointer = (event: PointerEvent & { currentTarget: Element }) => {
-    updateCursor(event);
-    dragCrosshair.update(event);
-  };
-
-  const updatePhasePointer = (event: PointerEvent & { currentTarget: Element }) => {
-    const plot = event.currentTarget;
-    const bounds = plot.getBoundingClientRect();
-    const wrapperBounds = plot.parentElement?.getBoundingClientRect();
-    if (!wrapperBounds) return;
-
-    const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-    const y = Math.max(0, Math.min(height, (event.clientY - bounds.top) / bounds.height * height));
-    const bin = Math.max(0, Math.min(bins() - 1, Math.round(x * (bins() - 1))));
-    const phase = Math.max(-Math.PI, Math.min(
-      Math.PI,
-      (height / 2 - y) / (height / 2 - 18) * Math.PI,
-    ));
-    const tooltipWidth = 190;
-    const tooltipHeight = 48;
-    setPhaseCursor({
-      bin,
-      phase,
-      left: Math.min(wrapperBounds.width - tooltipWidth - 6, Math.max(6, event.clientX - wrapperBounds.left + 14)),
-      top: Math.min(bounds.height - tooltipHeight - 6, Math.max(6, event.clientY - bounds.top - tooltipHeight - 8)),
-    });
-    phaseDragCrosshair.update(event);
-  };
-
-  const formatPhaseValue = (radians: number) => phaseUnit() === "degrees"
-    ? `${formatAxisValue(radians * 180 / Math.PI)}º`
-    : phaseUnit() === "turns"
-      ? `${formatAxisValue(radians / (2 * Math.PI))}τ`
-      : `${formatAxisValue(radians)} rad`;
-
-  onCleanup(() => {
-    if (animationFrame) cancelAnimationFrame(animationFrame);
-  });
-
   return (
     <section class="analyzer-panel" aria-label="Frequency domain analyzer">
       <div class="analyzer-heading">
@@ -1643,173 +1933,19 @@ const FrequencyDomain: Component<{
           <button class="icon-button remove-button analyzer-remove" type="button" aria-label="Remove Frequency domain" onClick={props.onRemove}>×</button>
         </div>
       </div>
-      <div class="frequency-plot-wrap">
-      <svg
-        ref={plot}
-        class="frequency-plot"
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label="Frequency domain spectrum"
-        onPointerDown={dragCrosshair.start}
-        onPointerMove={updateFrequencyPointer}
-        onPointerUp={dragCrosshair.stop}
-        onPointerCancel={dragCrosshair.stop}
-        onLostPointerCapture={dragCrosshair.stop}
-        onPointerLeave={() => setCursor()}
-      >
-        <defs>
-          <pattern id="frequency-grid" width="125" height="80" patternUnits="userSpaceOnUse">
-            <path d="M 125 0 L 0 0 0 80" fill="none" stroke="#24373b" stroke-width="1" />
-          </pattern>
-        </defs>
-        <rect width={width} height={height} fill="#0b1115" />
-        <rect width={width} height={height} fill="url(#frequency-grid)" />
-        <line x1="0" y1={height - 1} x2={width} y2={height - 1} class="frequency-axis" />
-        <For each={series()}>
-          {(item) => (
-            <Show
-              when={item.isAnalytic}
-              fallback={
-                <path
-                  d={item.values.map((value, index) => {
-                    const x = index / (bins() - 1) * width;
-                    const y = height - value * (height - 18) - 1;
-                    return `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
-                  }).join(" ")}
-                  fill="none"
-                  stroke={item.color}
-                  opacity={item.opacity}
-                  class="signal-path"
-                />
-              }
-            >
-              <For each={item.values.map((value, index) => ({ value, index })).filter(({ value }) => value > 0)}>
-                {({ value, index }) => {
-                  const x = index / (bins() - 1) * width;
-                  return (
-                    <line
-                      x1={x}
-                      y1={height - 1}
-                      x2={x}
-                      y2={height - value * (height - 18) - 1}
-                      stroke={item.color}
-                      opacity={item.opacity}
-                      class="signal-path"
-                    />
-                  );
-                }}
-              </For>
-            </Show>
-          )}
-        </For>
-        <For each={[0, 0.5, 1]}>
-          {(fraction) => <line x1="0" y1={height - 1 - fraction * (height - 18)} x2={width} y2={height - 1 - fraction * (height - 18)} class="frequency-axis frequency-axis-horizontal" />}
-        </For>
-        <Show when={dragCrosshair.crosshair()}>
-          {(point) => (
-            <g class="measurement-crosshair" aria-hidden="true">
-              <line x1={point().x} y1="0" x2={point().x} y2={height} />
-              <line x1="0" y1={point().y} x2={width} y2={point().y} />
-            </g>
-          )}
-        </Show>
-        <text x="8" y="19" class="frequency-title">MAGNITUDE</text>
-        <text x="8" y={height / 2} class="axis-tick">0.5</text>
-        <text x="8" y={38} class="axis-tick">1</text>
-        <text x="8" y={height - 8} class="axis-tick">0 Hz</text>
-        <text x={width / 2} y={height - 8} text-anchor="middle" class="axis-tick">{formatAxisValue(maxFrequency() / 2)} Hz</text>
-        <text x={width - 8} y={height - 8} text-anchor="end" class="axis-tick">{formatAxisValue(maxFrequency())} Hz</text>
-      </svg>
-      <Show when={cursor()}>
-        {(point) => (
-          <div class="frequency-tooltip" aria-hidden="true" style={{ left: `${point().left}px`, top: `${point().top}px` }}>
-            <span>f {formatAxisValue(point().bin / (bins() - 1) * maxFrequency())} Hz</span>
-            <span>M {formatAxisValue(series()[0]?.values[point().bin] ?? 0)}</span>
-          </div>
-        )}
-      </Show>
-      </div>
-      <div class="frequency-plot-wrap">
-      <svg
-        class="frequency-plot phase-plot"
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label="Frequency domain phase spectrum"
-        onPointerDown={phaseDragCrosshair.start}
-        onPointerMove={updatePhasePointer}
-        onPointerUp={phaseDragCrosshair.stop}
-        onPointerCancel={phaseDragCrosshair.stop}
-        onLostPointerCapture={phaseDragCrosshair.stop}
-        onPointerLeave={() => setPhaseCursor()}
-      >
-        <rect width={width} height={height} fill="#0b1115" />
-        <rect width={width} height={height} fill="url(#frequency-grid)" />
-        <line x1="0" y1={height / 2} x2={width} y2={height / 2} class="frequency-axis" />
-        <For each={[0, 0.5, 1]}>
-          {(fraction) => <line x1="0" y1={fraction * height} x2={width} y2={fraction * height} class="frequency-axis frequency-axis-horizontal" />}
-        </For>
-        <Show when={phaseDragCrosshair.crosshair()}>
-          {(point) => (
-            <g class="measurement-crosshair" aria-hidden="true">
-              <line x1={point().x} y1="0" x2={point().x} y2={height} />
-              <line x1="0" y1={point().y} x2={width} y2={point().y} />
-            </g>
-          )}
-        </Show>
-        <For each={phaseSeries()}>
-          {(item) => (
-            <Show
-              when={item.isAnalytic}
-              fallback={
-                <path
-                  d={item.values.map((value, index) => {
-                    const x = index / (bins() - 1) * width;
-                    const y = height / 2 - (value / Math.PI) * (height / 2 - 18);
-                    return `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
-                  }).join(" ")}
-                  fill="none"
-                  stroke={item.color}
-                  opacity={item.opacity}
-                  class="signal-path"
-                />
-              }
-            >
-              <For each={item.values.map((value, index) => ({ value, index })).filter(({ value }) => Number.isFinite(value))}>
-                {({ value, index }) => (
-                  <circle
-                    cx={index / (bins() - 1) * width}
-                    cy={height / 2 - (value / Math.PI) * (height / 2 - 18)}
-                    r="3"
-                    fill={item.color}
-                    opacity={item.opacity}
-                    class="signal-path"
-                  />
-                )}
-              </For>
-            </Show>
-          )}
-        </For>
-        <text x="8" y="19" class="frequency-title">PHASE</text>
-        <text x="8" y="38" class="axis-tick">{phaseLabel(1)}</text>
-        <text x="8" y={height / 2 + 4} class="axis-tick">0</text>
-        <text x="8" y={height - 8} class="axis-tick">{phaseLabel(-1)}</text>
-        <text x={width - 8} y={height - 8} text-anchor="end" class="axis-tick">{formatAxisValue(maxFrequency())} Hz</text>
-      </svg>
-      <Show when={phaseCursor()}>
-        {(point) => (
-          <div class="frequency-tooltip phase-tooltip" aria-hidden="true" style={{ left: `${point().left}px`, top: `${point().top}px` }}>
-            <span>f {formatAxisValue(point().bin / (bins() - 1) * maxFrequency())} Hz</span>
-            <span>Phase: {formatPhaseValue(point().phase)}</span>
-          </div>
-        )}
-      </Show>
-      </div>
+      <FrequencyMagnitudePlot
+        series={series()}
+        binCount={bins()}
+        maxFrequency={maxFrequency()}
+      />
+      <FrequencyPhasePlot
+        series={phaseSeries()}
+        binCount={bins()}
+        maxFrequency={maxFrequency()}
+        phaseUnit={phaseUnit()}
+      />
       <div class="frequency-footer">
-        <div class="analyzer-legend">
-          <For each={legendSeries()}>
-            {(item) => <span><i style={{ background: item.color, opacity: item.opacity }} />{item.name}</span>}
-          </For>
-        </div>
+        <AnalyzerLegend items={legendSeries()} className="analyzer-legend" />
         <button
           class="icon-button gear-button frequency-settings-toggle"
           type="button"
@@ -1821,59 +1957,12 @@ const FrequencyDomain: Component<{
         </button>
       </div>
       <Show when={settingsOpen()}>
-        <div class="analyzer-settings">
-          <div class="settings-row frequency-settings-row">
-            <h4 class="settings-row-label">Frequency plot</h4>
-            <label class="fft-size-setting">
-              <span>FFT SIZE</span>
-              <select
-                value={props.settings.sampleCount}
-                onChange={(event) => props.onSettingsChange({ ...props.settings, sampleCount: Number(event.currentTarget.value) })}
-              >
-                <option value="128">128</option>
-                <option value="256">256</option>
-                <option value="512">512</option>
-                <option value="1024">1024</option>
-              </select>
-            </label>
-            <label class="window-duration-setting">
-              <span>WINDOW (S)</span>
-              <NumericInput
-                min={0.001}
-                max={100}
-                value={props.settings.duration}
-                ariaLabel="Fourier analysis window duration"
-                onValue={(value) => props.onSettingsChange({ ...props.settings, duration: value })}
-              />
-            </label>
-            <label class="window-function-setting">
-              <span>WINDOW FUNCTION</span>
-              <select
-                value={props.settings.window}
-                onChange={(event) => props.onSettingsChange({ ...props.settings, window: event.currentTarget.value as WindowFunction })}
-              >
-                <option value="rectangular">Rectangular</option>
-                <option value="hann">Hann</option>
-                <option value="hamming">Hamming</option>
-              </select>
-            </label>
-          </div>
-          <div class="settings-row">
-            <h4 class="settings-row-label">Phase plot</h4>
-            <label>
-              <span>UNIT</span>
-              <select
-                value={phaseUnit()}
-                aria-label="Phase label units"
-                onChange={(event) => setPhaseUnit(event.currentTarget.value as PhaseUnit)}
-              >
-                <option value="degrees">Degrees</option>
-                <option value="radians">Radians</option>
-                <option value="turns">Turns</option>
-              </select>
-            </label>
-          </div>
-        </div>
+        <FrequencyAnalyzerSettings
+          settings={props.settings}
+          onSettingsChange={props.onSettingsChange}
+          phaseUnit={phaseUnit()}
+          onPhaseUnitChange={setPhaseUnit}
+        />
       </Show>
     </section>
   );
@@ -1896,6 +1985,12 @@ const Oscilloscope: Component<OscilloscopeProps> = (props) => {
   const divisionsX = 10;
   const divisionsY = 6;
   const samples = 1200;
+  const legendItems = createMemo(() => [
+    ...props.waves.filter((wave) => wave.visible).map(({ name, color, opacity }) => ({ name, color, opacity })),
+    ...props.groups
+      .filter((group) => group.visible && group.waveIds.length > 0)
+      .map(({ name, color, opacity }) => ({ name, color, opacity })),
+  ]);
   const isPolarPhase = () => mode() === "phase" && phaseCoordinates() === "polar";
   const formatPhaseAngle = (radians: number) => phaseUnit() === "degrees"
     ? `${formatAxisValue(radians * 180 / Math.PI)}º`
@@ -2199,22 +2294,7 @@ const Oscilloscope: Component<OscilloscopeProps> = (props) => {
           <span class="axis-label y-axis-label">{isPolarPhase() ? "Magnitude" : "Amplitude"}</span>
         </Show>
         <div class="plot-controls">
-          <div class="plot-legend">
-            <For each={props.waves}>
-            {(wave) => (
-              <Show when={wave.visible}>
-                <span><i style={{ background: wave.color, opacity: wave.opacity }} />{wave.name}</span>
-              </Show>
-            )}
-            </For>
-            <For each={props.groups}>
-              {(group) => (
-                <Show when={group.visible && group.waveIds.length > 0}>
-                  <span><i style={{ background: group.color, opacity: group.opacity }} />{group.name}</span>
-                </Show>
-              )}
-            </For>
-          </div>
+          <AnalyzerLegend items={legendItems()} className="plot-legend" />
           <button
             class="icon-button gear-button"
             type="button"
