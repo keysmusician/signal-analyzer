@@ -1,0 +1,119 @@
+:root { color-scheme: dark; }
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  color: #17201f;
+  background: #eef2f1;
+  --muted: #66726f;
+  --line: #d3dbd9;
+  --panel: #ffffff;
+  --green: #0b8a73;
+
+  body { background: #eef2f1; }
+
+  .app-header { background: #ffffff; border-bottom-color: #d3dbd9; }
+  .brand { color: #17201f; }
+  .brand-icon { border-color: #a9d3ca; background: #e3f5f1; }
+  .status-dot, .live-indicator { box-shadow: 0 0 9px #0b8a7355; }
+  .meta-divider { color: #b5c0bd; }
+  .header-version, .header-meta { color: #66726f; }
+  .header-version span { color: #8a9693; }
+
+  .eyebrow, .channel-count, .group-signal-count, .meter-kicker { color: #66726f; }
+  .channel-count, .group-signal-count { border-color: #d3dbd9; }
+  .group-card { border-color: #cdd7d4; background: #f5f8f7; }
+  .group-signals .wave-card { background: #ffffff; }
+  .wave-card, .scope-panel, .meter, .analyzer-panel { border-color: #d3dbd9; background: #ffffff; }
+  .analyzer-modal { border-color: #cdd7d4; background: #ffffff; box-shadow: 0 16px 48px #1f2a2940; }
+  .analyzer-modal-heading { border-color: #d3dbd9; }
+  .analyzer-option { border-color: #c5d0cd; color: #1f2a29; background: #ffffff; }
+  .analyzer-option:hover { border-color: #3c9e8e; background: #e0f5f0; }
+  .analyzer-option span, .analyzer-empty { color: #66726f; }
+  .group-header, .wave-header, .group-style-panel, .style-panel, .scope-toolbar, .scope-settings, .scope-hints { border-color: #dfe6e4; }
+  .style-panel, .scope-settings, .scope-hints, .analyzer-settings { background: #f5f8f7; }
+  .analyzer-settings, .settings-row + .settings-row { border-color: #d3dbd9; }
+  .settings-row-label { color: #44504d; }
+
+  .channel-mark:hover { box-shadow: 0 0 0 1px #0b8a73; }
+  .wave-name { color: #17201f; }
+  .icon-button { color: #66726f; }
+  .icon-button:hover { color: #17201f; background: #e3e9e7; }
+  .function-popover, .color-picker-popover { border-color: #cdd7d4; background: #ffffff; box-shadow: 0 10px 24px #1f2a2933; }
+  .phase-editor-popover { border-color: #cdd7d4; color: #1f2a29; background: #ffffff; box-shadow: 0 10px 24px #1f2a2933; }
+  .phase-editor-value { color: #66726f; }
+  .phase-editor-ring { stroke: #c5d0cd; }
+  .phase-editor-crosshair { stroke: #d3dbd9; }
+  .phase-editor-point { stroke: #ffffff; }
+  .function-popover button { color: #44504d; }
+  .function-popover button:hover, .function-popover button.selected { color: #0b8a73; background: #e0f5f0; }
+
+  .field-control > span, .field-title > span, .color-control > span, .opacity-control > span, .meter-signal > span, .analyzer-settings label > span { color: #66726f; }
+  .frequency-toggle { border-color: #cdd7d4; color: #66726f; background: #f5f8f7; }
+  .frequency-toggle:hover { border-color: #3c9e8e; color: #0b8a73; background: #e0f5f0; }
+
+  .input-with-unit input, .field-control select, .plain-number, .infinite-value, .color-swatch,
+  .meter-mode, .meter-signal select, .analyzer-toggle, .analyzer-settings select, .analyzer-settings input {
+    border-color: #c5d0cd; color: #1f2a29; background: #ffffff;
+  }
+  .phase-unit-select { border-left-color: #c5d0cd !important; }
+  .phase-unit-select option { color: #1f2a29; background: #ffffff; }
+  .phase-unit-display { color: #1f2a29; }
+  .phase-input::after, .input-with-unit small { color: #66726f; }
+  .input-with-unit input:focus, .field-control select:focus, .plain-number:focus, .color-swatch:hover,
+  .meter-mode:focus, .meter-signal select:focus, .analyzer-settings input:focus, .phase-input input:focus + .phase-unit-select {
+    border-color: #2f9b88;
+  }
+  .numeric-invalid, .numeric-invalid:focus { border-color: #c0394a !important; box-shadow: 0 0 0 1px #c0394a33; }
+
+  .color-value, .opacity-input output { color: #44504d; }
+  .opacity-input input { background: linear-gradient(to right, transparent, var(--signal-color)), #d3dbd9; }
+  .opacity-input input::-webkit-slider-thumb, .opacity-input input::-moz-range-thumb,
+  .hue-slider::-webkit-slider-thumb, .hue-slider::-moz-range-thumb { border-color: #44504d; background: #ffffff; }
+
+  .add-wave { border-color: #b9c6c2; color: #55615e; }
+  .add-wave:hover { border-color: #3c9e8e; color: #0b8a73; background: #e0f5f0; }
+  .add-wave > span:first-child { background: #e3ece9; }
+  .controls-hint { color: #66726f; }
+  .hint-icon { color: #5f8a81; }
+
+  .scope-scale-readout span, .scope-scale-readout small { color: #66726f; }
+  .scope-coordinate-setting > span { color: #66726f; }
+  .scope-scale-readout input { color: #1f2a29; }
+  .scope-scale-readout input:hover { border-color: #c5d0cd; }
+  .scope-scale-readout input:focus { border-color: #2f9b88; background: #ffffff; }
+
+  .plot, .frequency-plot { border-color: #d3dbd9; background: #ffffff; }
+  svg rect[fill="#0b1115"] { fill: #ffffff; }
+  svg path[stroke="#24373b"] { stroke: #d3dbd9; }
+  svg path[stroke="#17252a"] { stroke: #e8eeec; }
+  .axis-line, .frequency-axis { stroke: #98a8a4; }
+  .polar-gridline { stroke: #d3dbd9; }
+  .measurement-crosshair { stroke: #17201f; }
+  .axis-tick, .frequency-title { fill: #55615e; stroke: #ffffff; }
+  .cursor-readout, .frequency-tooltip { border-color: #cdd7d4; color: #1f2a29; background: #ffffffed; box-shadow: 0 5px 16px #1f2a2933; }
+  .axis-label { color: #66726f; }
+
+  .plot-legend span, .analyzer-legend span { color: #55615e; }
+  .scope-hints { color: #66726f; }
+  .scope-hints kbd { border-color: #cdd7d4; color: #44504d; background: #ffffff; }
+
+  .meter-value { color: #0b8a73; }
+  .meter-value small { color: #66726f; }
+
+  .analyzer-toggle { color: #66726f; }
+  .analyzer-toggle:hover, .analyzer-toggle.active { border-color: #3c9e8e; color: #0b8a73; background: #e0f5f0; }
+}
+
+.theme-toggle { display: flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid #293235; border-radius: 6px; background: #0c1114; }
+.theme-toggle button { display: grid; place-items: center; width: 28px; height: 24px; padding: 0; border: 0; border-radius: 4px; color: #81908d; background: transparent; cursor: pointer; }
+.theme-toggle button:hover { color: #e4ebe9; }
+.theme-toggle button.active { color: var(--green); background: #10201d; }
+.theme-toggle button:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+.theme-toggle svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+:root[data-theme="light"] {
+  .theme-toggle { border-color: #c5d0cd; background: #f5f8f7; }
+  .theme-toggle button { color: #66726f; }
+  .theme-toggle button:hover { color: #17201f; }
+  .theme-toggle button.active { color: #0b8a73; background: #e0f5f0; }
+}

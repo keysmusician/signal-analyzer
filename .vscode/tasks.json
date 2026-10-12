@@ -1,0 +1,31 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Vite dev server",
+      "type": "shell",
+      "command": "npm run dev -- --host 127.0.0.1",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": {
+          "regexp": "^$",
+          "message": 0
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": ".*Local:.*"
+        }
+      },
+      "presentation": {
+        "reveal": "never",
+        "panel": "dedicated",
+        "focus": false
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    }
+  ]
+}
